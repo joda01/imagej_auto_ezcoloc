@@ -56,11 +56,23 @@ function openVsiFile(input, output, file){
     	print("No image windows are open");
 	}
   	else {
+  		gfpIndex = 0;
+  	 	cy3Index = 1;
+  	 
      print("Image windows:");
      for (i=0; i<list1.length; i++){
+     	
         selectWindow(list1[i]);
-        run("Enhance Contrast...", "saturated=0.3 normalize");
-		run("Subtract Background...", "rolling=4");
+        
+        if(true == endsWith(list1[i], "C=1")){
+        	run("Enhance Contrast...", "saturated=0.3 normalize");
+        	print("Enhace CY3 " + toString(i));
+        	cy3Index = i;
+        }else{
+        	gfpIndex = i;
+        	run("Enhance Contrast...", "saturated=0.1 normalize");
+        }
+		run("Subtract Background...", "rolling=4 sliding");
 		run("Convolve...", "text1=[1 4 6 4 1\n4 16 24 16 4\n6 24 36 24 6\n4 16 24 16 4\n1 4 6 4 1] normalize");
 
 		setAutoThreshold("Li dark");
@@ -75,20 +87,20 @@ function openVsiFile(input, output, file){
 	run("Analyze Particles...", "clear add");
   	
 	// Measure picture 1
-	selectWindow(list1[0]);
+	selectWindow(list1[gfpIndex]);
 	roiManager("Measure");
-	saveAs("Results", output+File.separator + file+"_1.csv");
+	saveAs("Results", output+File.separator + file+"_gfp.csv");
 
 	run("Clear Results");
 
 	// Measure picture 2
-	selectWindow(list1[1]);
+	selectWindow(list1[cy3Index]);
 	roiManager("Measure");
-	saveAs("Results", output+File.separator + file+"_2.csv");
+	saveAs("Results", output+File.separator + file+"_cy3.csv");
 
 	cleanUp();
 
-	calcMeasurement(output+File.separator + file+"_1.csv",output+File.separator + file+"_2.csv",output);
+	calcMeasurement(output+File.separator + file+"_gfp.csv",output+File.separator + file+"_cy3.csv",output);
 }
 
 
@@ -97,26 +109,26 @@ function openVsiFile(input, output, file){
 /// The result is a value in range from [0, 255]
 /// 0 is no coloc 255 is maximum coloc.
 ///
-function calcMeasurement(result1, result2, output){
-	read1 = File.openAsString(result1);
-	read2 = File.openAsString(result2);
+function calcMeasurement(resultgfp, resultcy3, output){
+	read1 = File.openAsString(resultgfp);
+	read2 = File.openAsString(resultcy3);
 
 	lines1 = split(read1, "\n");
 	lines2 = split(read2, "\n");
 
-	result = "ROI\t\t Area\t\t CY3\t\t GFP\t\t DIFF\n";
+	result = "ROI\t\t Area\t\t GFP\t\t CY3\t\t DIFF\n";
 
 	for(i = 1; i<lines1.length; i++){
-		 line1 = split(lines1[i],",");
-		 line2 = split(lines2[i],",");
+		 linegfp = split(lines1[i],",");
+		 linecy3 = split(lines2[i],",");
 
-		  a = parseFloat(line1[2]);
-		  b = parseFloat(line2[2]);
+		  a = parseFloat(linegfp[2]);
+		  b = parseFloat(linecy3[2]);
 
 		// Coloc algorithm
 		 sub = abs(255 - abs(a - b));
-		 
-	     result = result +line1[0] + "\t\t" + line1[1]+"\t\t"+line1[2]+"\t\t"+line2[2] + "\t\t"+toString(sub)+"\n";
+
+	     result = result +linegfp[0] + "\t\t" + linegfp[1]+"\t\t"+linegfp[2]+"\t\t"+linecy3[2] + "\t\t"+toString(sub)+"\n";
 	}
 
 	File.saveString(result, output+File.separator + file+"_final.txt");
