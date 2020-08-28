@@ -61,19 +61,30 @@ function openVsiFile(input, output, file){
         selectWindow(list1[i]);
         run("Enhance Contrast...", "saturated=0.3 normalize");
 		run("Subtract Background...", "rolling=4");
-		run("Smooth");
-		run("Smooth");
-		run("Smooth");
+		run("Convolve...", "text1=[1 4 6 4 1\n4 16 24 16 4\n6 24 36 24 6\n4 16 24 16 4\n1 4 6 4 1] normalize");
 
+		setAutoThreshold("Li dark");
+		setOption("BlackBackground", true);
+		run("Convert to Mask");
      }
   	}
 
-	// Make the sum of both pictures to use this as Cell Identifier input
-  	imageCalculator("Add create", list1[0],list1[1]);
+	// Make the sum of both pictures to use this as Cell Identifier input | Add
+  	imageCalculator("Max create", list1[0],list1[1]);
+  	selectWindow("Result of "+list1[0]);
+	run("Analyze Particles...", "clear add");
+  	
+	// Measure picture 1
+	selectWindow(list1[0]);
+	roiManager("Measure");
+	saveAs("Results", output+File.separator + file+"_1.csv");
 
-	// Run the coloc algorithm and store the result as CSV to the output
-	run("EzColocalization ", "reporter_1_(ch.1)=["+list1[0]+"] reporter_2_(ch.2)=["+list1[1]+"] cell_identification_input=[Result of "+list1[0]+"] alignthold4=li tos metricthold1=costes' allft-c1-1=10 allft-c2-1=10 pcc metricthold2=all allft-c1-2=10 allft-c2-2=10 srcc metricthold3=all allft-c1-3=10 allft-c2-3=10 icq metricthold4=all allft-c1-4=10 allft-c2-4=10 mcc metricthold5=costes' allft-c1-5=10 allft-c2-5=10 summary");
-	saveAs("Results", output+File.separator + file+".csv");
+	run("Clear Results");
+
+	// Measure picture 2
+	selectWindow(list1[1]);
+	roiManager("Measure");
+	saveAs("Results", output+File.separator + file+"_2.csv");
 
 	cleanUp();
 }
@@ -90,7 +101,5 @@ function cleanUp() {
       selectWindow(winame);
      run("Close");
      }
-
      close("*");
 }
-
