@@ -87,8 +87,41 @@ function openVsiFile(input, output, file){
 	saveAs("Results", output+File.separator + file+"_2.csv");
 
 	cleanUp();
+
+	calcMeasurement(output+File.separator + file+"_1.csv",output+File.separator + file+"_2.csv",output);
 }
 
+
+///
+/// Calculates the Coloc coefficent
+/// The result is a value in range from [0, 255]
+/// 0 is no coloc 255 is maximum coloc.
+///
+function calcMeasurement(result1, result2, output){
+	read1 = File.openAsString(result1);
+	read2 = File.openAsString(result2);
+
+	lines1 = split(read1, "\n");
+	lines2 = split(read2, "\n");
+
+	result = "ROI\t\t Area\t\t CY3\t\t GFP\t\t DIFF\n";
+
+	for(i = 1; i<lines1.length; i++){
+		 line1 = split(lines1[i],",");
+		 line2 = split(lines2[i],",");
+
+		  a = parseFloat(line1[2]);
+		  b = parseFloat(line2[2]);
+
+		// Coloc algorithm
+		 sub = abs(255 - abs(a - b));
+		 
+	     result = result +line1[0] + "\t\t" + line1[1]+"\t\t"+line1[2]+"\t\t"+line2[2] + "\t\t"+toString(sub)+"\n";
+	}
+
+	File.saveString(result, output+File.separator + file+"_final.txt");
+
+}
 
 ///
 /// \brief Closes all open windows
