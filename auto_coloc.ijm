@@ -70,7 +70,7 @@ function openVsiFile(input, output, file){
         	cy3Index = i;
         }else{
         	gfpIndex = i;
-        	run("Enhance Contrast...", "saturated=0.1 normalize");
+        	//run("Enhance Contrast...", "saturated=0.1 normalize");
         }
 		run("Subtract Background...", "rolling=4 sliding");
 		run("Convolve...", "text1=[1 4 6 4 1\n4 16 24 16 4\n6 24 36 24 6\n4 16 24 16 4\n1 4 6 4 1] normalize");
