@@ -47,6 +47,9 @@ function processFile(input, output, file) {
 /// Open a two channel VSI and runs the EzColoc algorithm on it
 ///
 function openVsiFile(input, output, file){
+	cleanUp();
+
+	
 	filename = input + File.separator + file;
 	run("Bio-Formats Importer", "open=["+filename+"] autoscale color_mode=Grayscale rois_import=[ROI manager] specify_range split_channels view=Hyperstack stack_order=XYCZT series_1 c_begin_1=1 c_end_1=2 c_step_1=1"); 
 
@@ -139,8 +142,8 @@ function calcMeasurement(resultgfp, resultcy3, output){
 /// \brief Closes all open windows
 ///
 function cleanUp() {
-	
-	list = getList("window.titles");
+     roiManager("Delete");
+     list = getList("window.titles");
      for (i=0; i<list.length; i++){
      winame = list[i];
       selectWindow(winame);
