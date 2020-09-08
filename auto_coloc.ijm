@@ -10,9 +10,9 @@
 
 
 /// Open dialog to choose input and output folder
-#@ File (label = "Input directory", style = "directory") input
-#@ File (label = "Output directory", style = "directory") output
-#@ String (label = "File suffix", value = ".vsi") suffix
+#@File(label = "Input directory", style = "directory") input
+#@File(label = "Output directory", style = "directory") output
+#@String(label = "File suffix", value = ".vsi") suffix
 
 ///
 /// Seems to be the main :)
@@ -26,9 +26,9 @@ function processFolder(input) {
 	list = getFileList(input);
 	list = Array.sort(list);
 	for (i = 0; i < list.length; i++) {
-		if(File.isDirectory(input + File.separator + list[i]))
+		if (File.isDirectory(input + File.separator + list[i]))
 			processFolder(input + File.separator + list[i]);
-		if(endsWith(list[i], suffix))
+		if (endsWith(list[i], suffix))
 			processFile(input, output, list[i]);
 	}
 
@@ -46,64 +46,63 @@ function processFile(input, output, file) {
 ///
 /// Open a two channel VSI and runs the EzColoc algorithm on it
 ///
-function openVsiFile(input, output, file){
-	cleanUp();
-
+function openVsiFile(input, output, file) {
 	
+
 	filename = input + File.separator + file;
-	run("Bio-Formats Importer", "open=["+filename+"] autoscale color_mode=Grayscale rois_import=[ROI manager] specify_range split_channels view=Hyperstack stack_order=XYCZT series_1 c_begin_1=1 c_end_1=2 c_step_1=1"); 
+	run("Bio-Formats Importer", "open=[" + filename + "] autoscale color_mode=Grayscale rois_import=[ROI manager] specify_range split_channels view=Hyperstack stack_order=XYCZT series_1 c_begin_1=1 c_end_1=2 c_step_1=1");
 
 	list1 = getList("image.titles");
 
-	if (list1.length==0){
-    	print("No image windows are open");
+	if (list1.length == 0) {
+		print("No image windows are open");
 	}
-  	else {
-  		gfpIndex = 0;
-  	 	cy3Index = 1;
-  	 
-     print("Image windows:");
-     for (i=0; i<list1.length; i++){
-     	
-        selectWindow(list1[i]);
-        
-        if(true == endsWith(list1[i], "C=1")){
-        	run("Enhance Contrast...", "saturated=0.3 normalize");
-        	print("Enhace CY3 " + toString(i));
-        	cy3Index = i;
-        }else{
-        	gfpIndex = i;
-        	//run("Enhance Contrast...", "saturated=0.1 normalize");
-        }
-		run("Subtract Background...", "rolling=4 sliding");
-		run("Convolve...", "text1=[1 4 6 4 1\n4 16 24 16 4\n6 24 36 24 6\n4 16 24 16 4\n1 4 6 4 1] normalize");
+	else {
+		gfpIndex = 0;
+		cy3Index = 1;
 
-		setAutoThreshold("Li dark");
-		setOption("BlackBackground", true);
-		run("Convert to Mask");
-     }
-  	}
+		print("Image windows:");
+		for (i = 0; i < list1.length; i++) {
+
+			selectWindow(list1[i]);
+
+			if (true == endsWith(list1[i], "C=1")) {
+				run("Enhance Contrast...", "saturated=0.3 normalize");
+				print("Enhace CY3 " + toString(i));
+				cy3Index = i;
+			} else {
+				gfpIndex = i;
+				//run("Enhance Contrast...", "saturated=0.1 normalize");
+			}
+			run("Subtract Background...", "rolling=4 sliding");
+			run("Convolve...", "text1=[1 4 6 4 1\n4 16 24 16 4\n6 24 36 24 6\n4 16 24 16 4\n1 4 6 4 1] normalize");
+
+			setAutoThreshold("Li dark");
+			setOption("BlackBackground", true);
+			run("Convert to Mask");
+		}
+	}
 
 	// Make the sum of both pictures to use this as Cell Identifier input | Add
-  	imageCalculator("Max create", list1[0],list1[1]);
-  	selectWindow("Result of "+list1[0]);
+	imageCalculator("Max create", list1[0], list1[1]);
+	selectWindow("Result of " + list1[0]);
 	run("Analyze Particles...", "clear add");
-  	
+
 	// Measure picture 1
 	selectWindow(list1[gfpIndex]);
 	roiManager("Measure");
-	saveAs("Results", output+File.separator + file+"_gfp.csv");
+	saveAs("Results", output + File.separator + file + "_gfp.csv");
 
 	run("Clear Results");
 
 	// Measure picture 2
 	selectWindow(list1[cy3Index]);
 	roiManager("Measure");
-	saveAs("Results", output+File.separator + file+"_cy3.csv");
+	saveAs("Results", output + File.separator + file + "_cy3.csv");
 
 	cleanUp();
 
-	calcMeasurement(output+File.separator + file+"_gfp.csv",output+File.separator + file+"_cy3.csv",output);
+	calcMeasurement(output + File.separator + file + "_gfp.csv", output + File.separator + file + "_cy3.csv", output);
 }
 
 
@@ -112,7 +111,10 @@ function openVsiFile(input, output, file){
 /// The result is a value in range from [0, 255]
 /// 0 is no coloc 255 is maximum coloc.
 ///
-function calcMeasurement(resultgfp, resultcy3, output){
+function calcMeasurement(resultgfp, resultcy3, output) {
+
+	minAreaSize = 0.05;
+
 	read1 = File.openAsString(resultgfp);
 	read2 = File.openAsString(resultcy3);
 
@@ -121,20 +123,61 @@ function calcMeasurement(resultgfp, resultcy3, output){
 
 	result = "ROI\t\t Area\t\t GFP\t\t CY3\t\t DIFF\n";
 
-	for(i = 1; i<lines1.length; i++){
-		 linegfp = split(lines1[i],",");
-		 linecy3 = split(lines2[i],",");
+	numberOfTooSmallParticles = 0;
+	numberOfColocEvs = 0;
+	numberOfNotColocEvs = 0;
+	numberOfGfpOnly = 0;
+	numberOfCy3Only = 0;
 
-		  a = parseFloat(linegfp[2]);
-		  b = parseFloat(linecy3[2]);
+	// First line is header therefore start with 1
+	for (i = 1; i < lines1.length; i++) {
 
-		// Coloc algorithm
-		 sub = abs(255 - abs(a - b));
+			linegfp = split(lines1[i], ",");
+			linecy3 = split(lines2[i], ",");
+		if (linegfp[1] > minAreaSize) {
 
-	     result = result +linegfp[0] + "\t\t" + linegfp[1]+"\t\t"+linegfp[2]+"\t\t"+linecy3[2] + "\t\t"+toString(sub)+"\n";
+
+			a = parseFloat(linegfp[2]);
+			b = parseFloat(linecy3[2]);
+
+			// Coloc algorithm
+			sub = abs(255 - abs(a - b));
+
+			// Calculate the sum of coloc EVs
+			if(sub > 0){
+				numberOfColocEvs++;
+			}else{
+				numberOfNotColocEvs++;
+				// Take all values which do not coloc
+				// All with 255 in gfp = gfp only
+				// All with 255 in cy3 = cy3 only
+
+				if(255 == linegfp[2]){
+					numberOfGfpOnly++;
+				}
+				if(255 == linecy3[2]){
+					numberOfCy3Only++;
+				}
+			}
+
+			result = result + linegfp[0] + "\t\t" + linegfp[1] + "\t\t" + linegfp[2] + "\t\t" + linecy3[2] + "\t\t" + toString(sub) + "\n";
+		}else{
+			numberOfTooSmallParticles++;
+		}
 	}
 
-	File.saveString(result, output+File.separator + file+"_final.txt");
+	// Add the rest of the stastic
+	result = result + "\n------------------------------------------\n";
+	result = result + "Statistic:\n";
+	result = result + "------------------------------------------\n";
+	result = result + "Small ("+toString(minAreaSize)+")\t" + toString(numberOfTooSmallParticles)+"\n";
+	result = result + "Coloc    \t\t" + toString(numberOfColocEvs)+"\n";
+	result = result + "Not Coloc\t\t" + toString(numberOfNotColocEvs)+"\n";
+	result = result + "GFP only\t\t" + toString(numberOfGfpOnly)+"\n";
+	result = result + "CY3 only\t\t" + toString(numberOfCy3Only)+"\n";
+
+
+	File.saveString(result, output + File.separator + file + "_final.txt");
 
 }
 
@@ -142,12 +185,12 @@ function calcMeasurement(resultgfp, resultcy3, output){
 /// \brief Closes all open windows
 ///
 function cleanUp() {
-     roiManager("Delete");
-     list = getList("window.titles");
-     for (i=0; i<list.length; i++){
-     winame = list[i];
-      selectWindow(winame);
-     run("Close");
-     }
-     close("*");
+	roiManager("Delete");
+	list = getList("window.titles");
+	for (i = 0; i < list.length; i++) {
+		winame = list[i];
+		selectWindow(winame);
+		run("Close");
+	}
+	close("*");
 }
