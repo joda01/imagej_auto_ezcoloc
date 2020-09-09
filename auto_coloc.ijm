@@ -25,13 +25,17 @@ processFolder(input);
 function processFolder(input) {
 	list = getFileList(input);
 	list = Array.sort(list);
+	
+	allOverStatistic = "file;small;coloc;no coloc;GfpOnly;Cy3Only\n";
+
 	for (i = 0; i < list.length; i++) {
 		if (File.isDirectory(input + File.separator + list[i]))
 			processFolder(input + File.separator + list[i]);
 		if (endsWith(list[i], suffix))
-			processFile(input, output, list[i]);
+			allOverStatistic = allOverStatistic + processFile(input, output, list[i]);
 	}
 
+	File.saveString(allOverStatistic, output + File.separator + "statistic_all_over_final.txt");
 }
 
 ///
@@ -40,7 +44,8 @@ function processFolder(input) {
 function processFile(input, output, file) {
 	print("Processing: " + input + File.separator + file);
 	print("Saving to: " + output);
-	openVsiFile(input, output, file);
+	retVal = openVsiFile(input, output, file);
+	return retVal;
 }
 
 ///
@@ -102,7 +107,10 @@ function openVsiFile(input, output, file) {
 
 	cleanUp();
 
-	calcMeasurement(output + File.separator + file + "_gfp.csv", output + File.separator + file + "_cy3.csv", output);
+	result = calcMeasurement(output + File.separator + file + "_gfp.csv", output + File.separator + file + "_cy3.csv", output);
+
+	retVal = file + ";" + toString(result[0]) + ";" + toString(result[1]) + ";" + toString(result[2]) + ";" + toString(result[3])+ ";" + toString(result[4])+"\n";
+	return retVal;
 }
 
 
@@ -121,7 +129,7 @@ function calcMeasurement(resultgfp, resultcy3, output) {
 	lines1 = split(read1, "\n");
 	lines2 = split(read2, "\n");
 
-	result = "ROI\t\t Area\t\t GFP\t\t CY3\t\t DIFF\n";
+	result = "ROI; Area; GFP; CY3; DIFF\n";
 
 	numberOfTooSmallParticles = 0;
 	numberOfColocEvs = 0;
@@ -160,7 +168,7 @@ function calcMeasurement(resultgfp, resultcy3, output) {
 				}
 			}
 
-			result = result + linegfp[0] + "\t\t" + linegfp[1] + "\t\t" + linegfp[2] + "\t\t" + linecy3[2] + "\t\t" + toString(sub) + "\n";
+			result = result + linegfp[0] + ";" + linegfp[1] + ";" + linegfp[2] + ";" + linecy3[2] + ";" + toString(sub) + "\n";
 		}else{
 			numberOfTooSmallParticles++;
 		}
@@ -171,14 +179,16 @@ function calcMeasurement(resultgfp, resultcy3, output) {
 	result = result + "Statistic:\n";
 	result = result + "------------------------------------------\n";
 	result = result + "Small ("+toString(minAreaSize)+")\t" + toString(numberOfTooSmallParticles)+"\n";
-	result = result + "Coloc    \t\t" + toString(numberOfColocEvs)+"\n";
-	result = result + "Not Coloc\t\t" + toString(numberOfNotColocEvs)+"\n";
-	result = result + "GFP only\t\t" + toString(numberOfGfpOnly)+"\n";
-	result = result + "CY3 only\t\t" + toString(numberOfCy3Only)+"\n";
+	result = result + "Coloc    ;" + toString(numberOfColocEvs)+"\n";
+	result = result + "Not Coloc;" + toString(numberOfNotColocEvs)+"\n";
+	result = result + "GFP only;" + toString(numberOfGfpOnly)+"\n";
+	result = result + "CY3 only;" + toString(numberOfCy3Only)+"\n";
 
 
 	File.saveString(result, output + File.separator + file + "_final.txt");
 
+	retval = newArray(numberOfTooSmallParticles,numberOfColocEvs,numberOfNotColocEvs,numberOfGfpOnly,numberOfCy3Only);
+	return retval;
 }
 
 ///
