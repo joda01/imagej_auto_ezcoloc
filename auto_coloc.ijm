@@ -17,7 +17,12 @@
 ///
 /// Seems to be the main :)
 ///
-processFolder(input);
+allOverStatistic = "file;small;coloc;no coloc;GfpOnly;Cy3Only;GfpEvs;Cy3Evs\n";
+allOverStatistic = allOverStatistic + processFolder(input);
+
+
+print("All finished" + allOverStatistic);
+File.saveString(allOverStatistic, output + File.separator + "statistic_all_over_final.txt");
 
 ///
 /// Look recursie for vsi files and process them
@@ -25,17 +30,16 @@ processFolder(input);
 function processFolder(input) {
 	list = getFileList(input);
 	list = Array.sort(list);
-	
-	allOverStatistic = "file;small;coloc;no coloc;GfpOnly;Cy3Only\n";
-
+	retVal = "";
 	for (i = 0; i < list.length; i++) {
-		if (File.isDirectory(input + File.separator + list[i]))
-			processFolder(input + File.separator + list[i]);
-		if (endsWith(list[i], suffix))
-			allOverStatistic = allOverStatistic + processFile(input, output, list[i]);
+		if (File.isDirectory(input + File.separator + list[i])){
+			retVal = retVal + processFolder(input + File.separator + list[i]);
+		}
+		if (endsWith(list[i], suffix)){
+			retVal = retVal + processFile(input, output, list[i]);
+		}
 	}
-
-	File.saveString(allOverStatistic, output + File.separator + "statistic_all_over_final.txt");
+	return retVal;
 }
 
 ///
@@ -109,7 +113,8 @@ function openVsiFile(input, output, file) {
 
 	result = calcMeasurement(output + File.separator + file + "_gfp.csv", output + File.separator + file + "_cy3.csv", output);
 
-	retVal = file + ";" + toString(result[0]) + ";" + toString(result[1]) + ";" + toString(result[2]) + ";" + toString(result[3])+ ";" + toString(result[4])+"\n";
+	// All over statistics
+	retVal = file + ";" + toString(result[0]) + ";" + toString(result[1]) + ";" + toString(result[2]) + ";" + toString(result[3])+ ";" + toString(result[4])+ ";" + toString(result[5])+ ";" + toString(result[6])+"\n";
 	return retVal;
 }
 
@@ -136,6 +141,8 @@ function calcMeasurement(resultgfp, resultcy3, output) {
 	numberOfNotColocEvs = 0;
 	numberOfGfpOnly = 0;
 	numberOfCy3Only = 0;
+	numerOfFounfGfp = 0;
+	numberOfFoundCy3 = 0;
 
 	// First line is header therefore start with 1
 	for (i = 1; i < lines1.length; i++) {
@@ -143,7 +150,6 @@ function calcMeasurement(resultgfp, resultcy3, output) {
 			linegfp = split(lines1[i], ",");
 			linecy3 = split(lines2[i], ",");
 		if (linegfp[1] > minAreaSize) {
-
 
 			a = parseFloat(linegfp[2]);
 			b = parseFloat(linecy3[2]);
@@ -168,6 +174,16 @@ function calcMeasurement(resultgfp, resultcy3, output) {
 				}
 			}
 
+			//
+			// Count the found EVs
+			//
+			if(a > 0){
+				numerOfFounfGfp++;
+			}
+			if(b > 0){
+				numberOfFoundCy3++;
+			}
+			
 			result = result + linegfp[0] + ";" + linegfp[1] + ";" + linegfp[2] + ";" + linecy3[2] + ";" + toString(sub) + "\n";
 		}else{
 			numberOfTooSmallParticles++;
@@ -183,11 +199,13 @@ function calcMeasurement(resultgfp, resultcy3, output) {
 	result = result + "Not Coloc;" + toString(numberOfNotColocEvs)+"\n";
 	result = result + "GFP only;" + toString(numberOfGfpOnly)+"\n";
 	result = result + "CY3 only;" + toString(numberOfCy3Only)+"\n";
+	result = result + "GFP Evs;" + toString(numerOfFounfGfp)+"\n";
+	result = result + "CY3 Evs;" + toString(numberOfFoundCy3)+"\n";
 
 
 	File.saveString(result, output + File.separator + file + "_final.txt");
 
-	retval = newArray(numberOfTooSmallParticles,numberOfColocEvs,numberOfNotColocEvs,numberOfGfpOnly,numberOfCy3Only);
+	retval = newArray(numberOfTooSmallParticles,numberOfColocEvs,numberOfNotColocEvs,numberOfGfpOnly,numberOfCy3Only,numerOfFounfGfp,numberOfFoundCy3);
 	return retval;
 }
 
