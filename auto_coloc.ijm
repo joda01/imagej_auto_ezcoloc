@@ -81,73 +81,71 @@ function openVsiFile(input, output, file) {
 		print("No image windows are open");
 	}
 	else {
-		
-			gfpIndex = 0;
-			cy3Index = 1;
 
-			print("Image windows:");
-			for (i = 0; i < list1.length; i++) {
+		gfpIndex = 0;
+		cy3Index = 1;
 
-				selectWindow(list1[i]);
+		print("Image windows:");
+		for (i = 0; i < list1.length; i++) {
 
-				// Red Channel selection
-				if (false == endsWith(list1[i], settings[SETTING_GREEN_CHANNEL])) {
-					cy3Index = i;
-				} else {
-					gfpIndex = i;
-					//run("Enhance Contrast...", "saturated=0.1 normalize");
-				}
+			selectWindow(list1[i]);
 
-				if (((true == endsWith(list1[i], "C=0")) && (true == settings[SETTING_ENHANCE_CONTRAST_C0])) &&
-				    ((true == endsWith(list1[i], "C=1")) && (true == settings[SETTING_ENHANCE_CONTRAST_C1]))){
-					run("Enhance Contrast...", "saturated=0.3 normalize");
-					print("Enhace CY3 " + toString(i));
-				}
-
-				run("Subtract Background...", "rolling=4 sliding");
-				run("Convolve...", "text1=[1 4 6 4 1\n4 16 24 16 4\n6 24 36 24 6\n4 16 24 16 4\n1 4 6 4 1] normalize");
-
-				setAutoThreshold("Li dark");
-				setOption("BlackBackground", true);
-				run("Convert to Mask");
+			// Red Channel selection
+			if (false == endsWith(list1[i], settings[SETTING_GREEN_CHANNEL])) {
+				cy3Index = i;
+			} else {
+				gfpIndex = i;
 			}
 
-			// Make the sum of both pictures to use this as Cell Identifier input | Add
-
-			imageCalculator("Max create", list1[0], list1[1]);
-			selectWindow("Result of " + list1[0]);
-			run("Analyze Particles...", "clear add");
-
-			// Measure picture 1
-			selectWindow(list1[gfpIndex]);
-			roiManager("Measure");
-			saveAs("Results", output + File.separator + file + "_gfp.csv");
-
-			run("Clear Results");
-
-			// Measure picture 2
-			selectWindow(list1[cy3Index]);
-			roiManager("Measure");
-			saveAs("Results", output + File.separator + file + "_cy3.csv");
-
-			cleanUp();
-
-			if (settings[SETTING_COLOC_ACTIVE] == true) {
-
-				result = calcColocalization(output + File.separator + file + "_gfp.csv", output + File.separator + file + "_cy3.csv", output);
-				retVal = file + ";" + toString(result[0]) + ";" + toString(result[1]) + ";" + toString(result[2]) + ";" + toString(result[3]) + ";" + toString(result[4]) + ";" + toString(result[5]) + ";" + toString(result[6]) + "\n";
-				return retVal;
+			if (((true == endsWith(list1[i], "C=0")) && (true == settings[SETTING_ENHANCE_CONTRAST_C0])) ||
+				((true == endsWith(list1[i], "C=1")) && (true == settings[SETTING_ENHANCE_CONTRAST_C1]))) {
+				run("Enhance Contrast...", "saturated=0.3 normalize");
 			}
-			else{
-				result = countEvs(output + File.separator + file + "_gfp.csv", output);
-				retVal = file + " GFP;" + toString(result[0]) + ";" + toString(result[1]) + "\n";
 
-				result = countEvs(output + File.separator + file + "_cy3.csv", output);
-				retVal = retVal+ file + " CY3;" + toString(result[0]) + ";" + toString(result[1]) + "\n";
-				return retVal;
-			}
-		
+			run("Subtract Background...", "rolling=4 sliding");
+			run("Convolve...", "text1=[1 4 6 4 1\n4 16 24 16 4\n6 24 36 24 6\n4 16 24 16 4\n1 4 6 4 1] normalize");
+
+			setAutoThreshold("Li dark");
+			setOption("BlackBackground", true);
+			run("Convert to Mask");
 		}
+
+		// Make the sum of both pictures to use this as Cell Identifier input | Add
+
+		imageCalculator("Max create", list1[0], list1[1]);
+		selectWindow("Result of " + list1[0]);
+		run("Analyze Particles...", "clear add");
+
+		// Measure picture 1
+		selectWindow(list1[gfpIndex]);
+		roiManager("Measure");
+		saveAs("Results", output + File.separator + file + "_gfp.csv");
+
+		run("Clear Results");
+
+		// Measure picture 2
+		selectWindow(list1[cy3Index]);
+		roiManager("Measure");
+		saveAs("Results", output + File.separator + file + "_cy3.csv");
+
+		cleanUp();
+
+		if (settings[SETTING_COLOC_ACTIVE] == true) {
+
+			result = calcColocalization(output + File.separator + file + "_gfp.csv", output + File.separator + file + "_cy3.csv", output);
+			retVal = file + ";" + toString(result[0]) + ";" + toString(result[1]) + ";" + toString(result[2]) + ";" + toString(result[3]) + ";" + toString(result[4]) + ";" + toString(result[5]) + ";" + toString(result[6]) + "\n";
+			return retVal;
+		}
+		else {
+			result = countEvs(output + File.separator + file + "_gfp.csv", output);
+			retVal = file + " GFP;" + toString(result[0]) + ";" + toString(result[1]) + "\n";
+
+			result = countEvs(output + File.separator + file + "_cy3.csv", output);
+			retVal = retVal + file + " CY3;" + toString(result[0]) + ";" + toString(result[1]) + "\n";
+			return retVal;
+		}
+
+	}
 }
 
 
@@ -317,27 +315,27 @@ function openGui() {
 	outPath = output;
 
 	Dialog.create("EV colocalizer");
-	Dialog.addString("Input path:", inPath);
-	Dialog.addString("Results path:", outPath);
+	//Dialog.addString("Input path:", inPath);
+	//Dialog.addString("Results path:", outPath);
 	Dialog.addChoice("Number of channels:", newArray(2, 1));
 	Dialog.addChoice("Green Channel:", newArray("C=0", "C=1"));
 	Dialog.addCheckbox("Enhance contrast for C=0", false);
 	Dialog.addCheckbox("Enhance contrast for C=1", true);
 	Dialog.addCheckbox("Calculate Colocalization", true);
-	Dialog.addNumber("Min particle size:",0.05);
+	Dialog.addNumber("Min particle size:", 0.05);
 	Dialog.addMessage("(c) 2020 J.D. | Licensed under the MIT license");
 	Dialog.show();
 
-	inPath = Dialog.getString();
-	outPath = Dialog.getString();
+	//inPath = Dialog.getString();
+	//outPath = Dialog.getString();
 	nrOfChannels = Dialog.getChoice();
 	greenChannel = Dialog.getChoice();
-	enhanceForC0 =  Dialog.getCheckbox();
-	enhanceForC1 =  Dialog.getCheckbox();
+	enhanceForC0 = Dialog.getCheckbox();
+	enhanceForC1 = Dialog.getCheckbox();
 	colocActive = Dialog.getCheckbox();
 	minParticleSize = Dialog.getNumber();
 
 
-	retval = newArray(inPath, outPath, nrOfChannels, greenChannel, enhanceForC0,enhanceForC1, minParticleSize, colocActive);
+	retval = newArray(inPath, outPath, nrOfChannels, greenChannel, enhanceForC0, enhanceForC1, minParticleSize, colocActive);
 	return retval;
 }
