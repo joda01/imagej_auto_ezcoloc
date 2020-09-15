@@ -17,7 +17,21 @@
 ///
 /// Seems to be the main :)
 ///
-allOverStatistic = "file;small;coloc;no coloc;GfpOnly;Cy3Only;GfpEvs;Cy3Evs\n";
+
+// inPath, outPath, nrOfChannels, greenChannel, enhanceForC0,enhanceForC1, minParticleSize, colocActive
+SETTING_NR_OF_CHANNELS = 2;
+SETTING_GREEN_CHANNEL = 3;
+SETTING_ENHANCE_CONTRAST_C0 = 4;
+SETTING_ENHANCE_CONTRAST_C1 = 5;
+SETTING_MIN_PARTICLE_SIZE = 6;
+SETTING_COLOC_ACTIVE = 7;
+settings = openGui();
+
+if (settings[SETTING_COLOC_ACTIVE] == true) {
+	allOverStatistic = "file;small;coloc;no coloc;GfpOnly;Cy3Only;GfpEvs;Cy3Evs\n";
+} else {
+	allOverStatistic = "file;small;found EVs\n";
+}
 allOverStatistic = allOverStatistic + processFolder(input);
 
 
@@ -32,10 +46,10 @@ function processFolder(input) {
 	list = Array.sort(list);
 	retVal = "";
 	for (i = 0; i < list.length; i++) {
-		if (File.isDirectory(input + File.separator + list[i])){
+		if (File.isDirectory(input + File.separator + list[i])) {
 			retVal = retVal + processFolder(input + File.separator + list[i]);
 		}
-		if (endsWith(list[i], suffix)){
+		if (endsWith(list[i], suffix)) {
 			retVal = retVal + processFile(input, output, list[i]);
 		}
 	}
@@ -56,7 +70,7 @@ function processFile(input, output, file) {
 /// Open a two channel VSI and runs the EzColoc algorithm on it
 ///
 function openVsiFile(input, output, file) {
-	
+
 
 	filename = input + File.separator + file;
 	run("Bio-Formats Importer", "open=[" + filename + "] autoscale color_mode=Grayscale rois_import=[ROI manager] specify_range split_channels view=Hyperstack stack_order=XYCZT series_1 c_begin_1=1 c_end_1=2 c_step_1=1");
@@ -67,55 +81,73 @@ function openVsiFile(input, output, file) {
 		print("No image windows are open");
 	}
 	else {
-		gfpIndex = 0;
-		cy3Index = 1;
+		
+			gfpIndex = 0;
+			cy3Index = 1;
 
-		print("Image windows:");
-		for (i = 0; i < list1.length; i++) {
+			print("Image windows:");
+			for (i = 0; i < list1.length; i++) {
 
-			selectWindow(list1[i]);
+				selectWindow(list1[i]);
 
-			if (true == endsWith(list1[i], "C=1")) {
-				run("Enhance Contrast...", "saturated=0.3 normalize");
-				print("Enhace CY3 " + toString(i));
-				cy3Index = i;
-			} else {
-				gfpIndex = i;
-				//run("Enhance Contrast...", "saturated=0.1 normalize");
+				// Red Channel selection
+				if (false == endsWith(list1[i], settings[SETTING_GREEN_CHANNEL])) {
+					cy3Index = i;
+				} else {
+					gfpIndex = i;
+					//run("Enhance Contrast...", "saturated=0.1 normalize");
+				}
+
+				if (((true == endsWith(list1[i], "C=0")) && (true == settings[SETTING_ENHANCE_CONTRAST_C0])) &&
+				    ((true == endsWith(list1[i], "C=1")) && (true == settings[SETTING_ENHANCE_CONTRAST_C1]))){
+					run("Enhance Contrast...", "saturated=0.3 normalize");
+					print("Enhace CY3 " + toString(i));
+				}
+
+				run("Subtract Background...", "rolling=4 sliding");
+				run("Convolve...", "text1=[1 4 6 4 1\n4 16 24 16 4\n6 24 36 24 6\n4 16 24 16 4\n1 4 6 4 1] normalize");
+
+				setAutoThreshold("Li dark");
+				setOption("BlackBackground", true);
+				run("Convert to Mask");
 			}
-			run("Subtract Background...", "rolling=4 sliding");
-			run("Convolve...", "text1=[1 4 6 4 1\n4 16 24 16 4\n6 24 36 24 6\n4 16 24 16 4\n1 4 6 4 1] normalize");
 
-			setAutoThreshold("Li dark");
-			setOption("BlackBackground", true);
-			run("Convert to Mask");
+			// Make the sum of both pictures to use this as Cell Identifier input | Add
+
+			imageCalculator("Max create", list1[0], list1[1]);
+			selectWindow("Result of " + list1[0]);
+			run("Analyze Particles...", "clear add");
+
+			// Measure picture 1
+			selectWindow(list1[gfpIndex]);
+			roiManager("Measure");
+			saveAs("Results", output + File.separator + file + "_gfp.csv");
+
+			run("Clear Results");
+
+			// Measure picture 2
+			selectWindow(list1[cy3Index]);
+			roiManager("Measure");
+			saveAs("Results", output + File.separator + file + "_cy3.csv");
+
+			cleanUp();
+
+			if (settings[SETTING_COLOC_ACTIVE] == true) {
+
+				result = calcColocalization(output + File.separator + file + "_gfp.csv", output + File.separator + file + "_cy3.csv", output);
+				retVal = file + ";" + toString(result[0]) + ";" + toString(result[1]) + ";" + toString(result[2]) + ";" + toString(result[3]) + ";" + toString(result[4]) + ";" + toString(result[5]) + ";" + toString(result[6]) + "\n";
+				return retVal;
+			}
+			else{
+				result = countEvs(output + File.separator + file + "_gfp.csv", output);
+				retVal = file + " GFP;" + toString(result[0]) + ";" + toString(result[1]) + "\n";
+
+				result = countEvs(output + File.separator + file + "_cy3.csv", output);
+				retVal = retVal+ file + " CY3;" + toString(result[0]) + ";" + toString(result[1]) + "\n";
+				return retVal;
+			}
+		
 		}
-	}
-
-	// Make the sum of both pictures to use this as Cell Identifier input | Add
-	imageCalculator("Max create", list1[0], list1[1]);
-	selectWindow("Result of " + list1[0]);
-	run("Analyze Particles...", "clear add");
-
-	// Measure picture 1
-	selectWindow(list1[gfpIndex]);
-	roiManager("Measure");
-	saveAs("Results", output + File.separator + file + "_gfp.csv");
-
-	run("Clear Results");
-
-	// Measure picture 2
-	selectWindow(list1[cy3Index]);
-	roiManager("Measure");
-	saveAs("Results", output + File.separator + file + "_cy3.csv");
-
-	cleanUp();
-
-	result = calcMeasurement(output + File.separator + file + "_gfp.csv", output + File.separator + file + "_cy3.csv", output);
-
-	// All over statistics
-	retVal = file + ";" + toString(result[0]) + ";" + toString(result[1]) + ";" + toString(result[2]) + ";" + toString(result[3])+ ";" + toString(result[4])+ ";" + toString(result[5])+ ";" + toString(result[6])+"\n";
-	return retVal;
 }
 
 
@@ -124,9 +156,9 @@ function openVsiFile(input, output, file) {
 /// The result is a value in range from [0, 255]
 /// 0 is no coloc 255 is maximum coloc.
 ///
-function calcMeasurement(resultgfp, resultcy3, output) {
+function calcColocalization(resultgfp, resultcy3, output) {
 
-	minAreaSize = 0.05;
+	minAreaSize = settings[SETTING_MIN_PARTICLE_SIZE];
 
 	read1 = File.openAsString(resultgfp);
 	read2 = File.openAsString(resultcy3);
@@ -147,8 +179,8 @@ function calcMeasurement(resultgfp, resultcy3, output) {
 	// First line is header therefore start with 1
 	for (i = 1; i < lines1.length; i++) {
 
-			linegfp = split(lines1[i], ",");
-			linecy3 = split(lines2[i], ",");
+		linegfp = split(lines1[i], ",");
+		linecy3 = split(lines2[i], ",");
 		if (linegfp[1] > minAreaSize) {
 
 			a = parseFloat(linegfp[2]);
@@ -158,18 +190,18 @@ function calcMeasurement(resultgfp, resultcy3, output) {
 			sub = abs(255 - abs(a - b));
 
 			// Calculate the sum of coloc EVs
-			if(sub > 0){
+			if (sub > 0) {
 				numberOfColocEvs++;
-			}else{
+			} else {
 				numberOfNotColocEvs++;
 				// Take all values which do not coloc
 				// All with 255 in gfp = gfp only
 				// All with 255 in cy3 = cy3 only
 
-				if(255 == linegfp[2]){
+				if (255 == linegfp[2]) {
 					numberOfGfpOnly++;
 				}
-				if(255 == linecy3[2]){
+				if (255 == linecy3[2]) {
 					numberOfCy3Only++;
 				}
 			}
@@ -177,15 +209,15 @@ function calcMeasurement(resultgfp, resultcy3, output) {
 			//
 			// Count the found EVs
 			//
-			if(a > 0){
+			if (a > 0) {
 				numerOfFounfGfp++;
 			}
-			if(b > 0){
+			if (b > 0) {
 				numberOfFoundCy3++;
 			}
-			
+
 			result = result + linegfp[0] + ";" + linegfp[1] + ";" + linegfp[2] + ";" + linecy3[2] + ";" + toString(sub) + "\n";
-		}else{
+		} else {
 			numberOfTooSmallParticles++;
 		}
 	}
@@ -194,20 +226,73 @@ function calcMeasurement(resultgfp, resultcy3, output) {
 	result = result + "\n------------------------------------------\n";
 	result = result + "Statistic:\n";
 	result = result + "------------------------------------------\n";
-	result = result + "Small ("+toString(minAreaSize)+")\t" + toString(numberOfTooSmallParticles)+"\n";
-	result = result + "Coloc    ;" + toString(numberOfColocEvs)+"\n";
-	result = result + "Not Coloc;" + toString(numberOfNotColocEvs)+"\n";
-	result = result + "GFP only;" + toString(numberOfGfpOnly)+"\n";
-	result = result + "CY3 only;" + toString(numberOfCy3Only)+"\n";
-	result = result + "GFP Evs;" + toString(numerOfFounfGfp)+"\n";
-	result = result + "CY3 Evs;" + toString(numberOfFoundCy3)+"\n";
+	result = result + "Small (" + toString(minAreaSize) + ")\t" + toString(numberOfTooSmallParticles) + "\n";
+	result = result + "Coloc    ;" + toString(numberOfColocEvs) + "\n";
+	result = result + "Not Coloc;" + toString(numberOfNotColocEvs) + "\n";
+	result = result + "GFP only;" + toString(numberOfGfpOnly) + "\n";
+	result = result + "CY3 only;" + toString(numberOfCy3Only) + "\n";
+	result = result + "GFP Evs;" + toString(numerOfFounfGfp) + "\n";
+	result = result + "CY3 Evs;" + toString(numberOfFoundCy3) + "\n";
 
 
 	File.saveString(result, output + File.separator + file + "_final.txt");
 
-	retval = newArray(numberOfTooSmallParticles,numberOfColocEvs,numberOfNotColocEvs,numberOfGfpOnly,numberOfCy3Only,numerOfFounfGfp,numberOfFoundCy3);
+	retval = newArray(numberOfTooSmallParticles, numberOfColocEvs, numberOfNotColocEvs, numberOfGfpOnly, numberOfCy3Only, numerOfFounfGfp, numberOfFoundCy3);
 	return retval;
 }
+
+
+///
+/// Counts the EVs in the picture
+/// The result is a value in range from [0, 255]
+/// 0 is no coloc 255 is maximum coloc.
+///
+function countEvs(resultmeasure, output) {
+
+	minAreaSize = settings[SETTING_MIN_PARTICLE_SIZE];
+
+	read1 = File.openAsString(resultmeasure);
+	lines1 = split(read1, "\n");
+
+	result = "ROI; Area; Measure\n";
+
+	numberOfTooSmallParticles = 0;
+	numberOfFoundEVs = 0;
+
+	// First line is header therefore start with 1
+	for (i = 1; i < lines1.length; i++) {
+
+		linemeas = split(lines1[i], ",");
+		if (linemeas[1] > minAreaSize) {
+
+			a = parseFloat(linemeas[2]);
+
+			//
+			// Count the found EVs
+			//
+			if (a > 0) {
+				numberOfFoundEVs++;
+			}
+			result = result + linemeas[0] + ";" + linemeas[1] + ";" + linemeas[2] + "\n";
+		} else {
+			numberOfTooSmallParticles++;
+		}
+	}
+
+	// Add the rest of the stastic
+	result = result + "\n------------------------------------------\n";
+	result = result + "Statistic:\n";
+	result = result + "------------------------------------------\n";
+	result = result + "Small (" + toString(minAreaSize) + ")\t" + toString(numberOfTooSmallParticles) + "\n";
+	result = result + "Found Evs;" + toString(numberOfFoundEVs) + "\n";
+
+
+	File.saveString(result, output + File.separator + file + "_final.txt");
+
+	retval = newArray(numberOfTooSmallParticles, numberOfFoundEVs);
+	return retval;
+}
+
 
 ///
 /// \brief Closes all open windows
@@ -221,4 +306,38 @@ function cleanUp() {
 		run("Close");
 	}
 	close("*");
+}
+
+///
+/// \brief Open GUI interface
+///
+function openGui() {
+
+	inPath = input;
+	outPath = output;
+
+	Dialog.create("EV colocalizer");
+	Dialog.addString("Input path:", inPath);
+	Dialog.addString("Results path:", outPath);
+	Dialog.addChoice("Number of channels:", newArray(2, 1));
+	Dialog.addChoice("Green Channel:", newArray("C=0", "C=1"));
+	Dialog.addCheckbox("Enhance contrast for C=0", false);
+	Dialog.addCheckbox("Enhance contrast for C=1", true);
+	Dialog.addCheckbox("Calculate Colocalization", true);
+	Dialog.addNumber("Min particle size:",0.05);
+	Dialog.addMessage("(c) 2020 J.D. | Licensed under the MIT license");
+	Dialog.show();
+
+	inPath = Dialog.getString();
+	outPath = Dialog.getString();
+	nrOfChannels = Dialog.getChoice();
+	greenChannel = Dialog.getChoice();
+	enhanceForC0 =  Dialog.getCheckbox();
+	enhanceForC1 =  Dialog.getCheckbox();
+	colocActive = Dialog.getCheckbox();
+	minParticleSize = Dialog.getNumber();
+
+
+	retval = newArray(inPath, outPath, nrOfChannels, greenChannel, enhanceForC0,enhanceForC1, minParticleSize, colocActive);
+	return retval;
 }
